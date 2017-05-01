@@ -30,7 +30,7 @@ public class ConnectingThread extends Thread {
             // MY_UUID is the app's UUID string, also used in the server code.
             tmp = device.createRfcommSocketToServiceRecord(MY_UUID);
         } catch (IOException e) {
-            Log.e(TAG, "Socket's create() method failed", e);
+            Log.d("mylog", "Socket's create() method failed");
         }
         mmSocket = tmp;
     }
@@ -49,7 +49,7 @@ public class ConnectingThread extends Thread {
             try {
                 mmSocket.close();
             } catch (IOException closeException) {
-                Log.e(TAG, "Could not close the client socket", closeException);
+                Log.d("mylog", "Could not close the client socket");
             }
             return;
         }
@@ -66,7 +66,7 @@ public class ConnectingThread extends Thread {
         try {
             mmSocket.close();
         } catch (IOException e) {
-            Log.e(TAG, "Could not close the client socket", e);
+            Log.d("mylog", "Could not close the client socket");
         }
     }
 }

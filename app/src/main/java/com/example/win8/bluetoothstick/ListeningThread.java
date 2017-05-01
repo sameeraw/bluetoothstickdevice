@@ -28,7 +28,7 @@ public class ListeningThread extends Thread {
             // MY_UUID is the app's UUID string, also used by the client code.
             tmp = mBluetoothAdapter.listenUsingRfcommWithServiceRecord("BluetoothStick", MY_UUID);
         } catch (IOException e) {
-            Log.e(TAG, "Socket's listen() method failed", e);
+            Log.d("mylog", "Socket's listen() method failed");
         }
         mmServerSocket = tmp;
     }
@@ -40,7 +40,7 @@ public class ListeningThread extends Thread {
             try {
                 socket = mmServerSocket.accept();
             } catch (IOException e) {
-                Log.e(TAG, "Socket's accept() method failed", e);
+                Log.d("mylog", "Socket's accept() method failed");
                 break;
             }
 
@@ -67,7 +67,7 @@ public class ListeningThread extends Thread {
         try {
             mmServerSocket.close();
         } catch (IOException e) {
-            Log.e(TAG, "Could not close the connect socket", e);
+            Log.d("mylog", "Could not close the connect socket");
         }
     }
 }
