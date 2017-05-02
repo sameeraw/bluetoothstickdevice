@@ -3,8 +3,11 @@ package com.example.win8.bluetoothstick;
 import android.app.ListActivity;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothSocket;
 import android.content.*;
 import android.graphics.Color;
+import android.net.Uri;
+import android.os.Handler;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
@@ -17,6 +20,11 @@ import android.view.MenuItem;
 import android.view.View;
 import android.widget.*;
 
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.lang.reflect.Method;
 import java.util.*;
 
 public class ListofDevices extends ListActivity  {
@@ -30,6 +38,13 @@ public class ListofDevices extends ListActivity  {
     ArrayAdapter<String> adapter ;
     Button scanbutton ;
     private String m_Text = "";
+    private BluetoothSocket mmSocket ;
+    private OutputStream mmOutputStream;
+    private InputStream mmInputStream;
+    private boolean stopWorker;
+    private int readBufferPosition;
+    private byte readBuffer [] ;
+    private Thread workerThread ;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
 
@@ -61,8 +76,8 @@ public class ListofDevices extends ListActivity  {
         });
 
         builder.show();
-        ListeningThread t = new ListeningThread();
-        t.start();
+        //ListeningThread t = new ListeningThread();
+      //  t.start();
       //  Log.d("mylog" ,"listofdevices") ;
 
         listview=(ListView) findViewById(R.layout.activity_listof_devices);
@@ -105,8 +120,15 @@ public class ListofDevices extends ListActivity  {
             String MAC = itemValue.substring(itemValue.length() - 17);
                     BluetoothDevice bluetoothDevice = btAdapter.getRemoteDevice(MAC);
                     // Initiate a connection request in a separate thread
-                    ConnectingThread t = new ConnectingThread(bluetoothDevice);
-                    t.start();
+                   // ConnectingThread t = new ConnectingThread(bluetoothDevice);
+                   // t.start();
+            try {
+                openBT(bluetoothDevice) ;
+                sendData();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            //pairDevice(bluetoothDevice) ;
                     Toast.makeText(ListofDevices.this,"Initializing Connection Request to"+MAC,Toast.LENGTH_SHORT).show();
 
                 }else{
@@ -117,6 +139,107 @@ public class ListofDevices extends ListActivity  {
             }
         });
     }
+    void openBT(BluetoothDevice mmDevice) throws IOException {
+        UUID uuid = UUID.fromString("00001101-0000-1000-8000-00805f9b34fb"); //Standard                //SerialPortService ID
+        mmSocket = mmDevice.createRfcommSocketToServiceRecord(uuid);
+        mmSocket.connect();
+        mmOutputStream = mmSocket.getOutputStream();
+        mmInputStream = mmSocket.getInputStream();
+        beginListenForData();
+        Log.d("mylog","bluetooth opened");
+    }
+
+    void beginListenForData() {
+        final Handler handler = new Handler();
+        final byte delimiter = 10; //This is the ASCII code for a newline character
+
+        stopWorker = false;
+        readBufferPosition = 0;
+        readBuffer = new byte[1024];
+        workerThread = new Thread(new Runnable() {
+            public void run() {
+                while(!Thread.currentThread().isInterrupted() && !stopWorker) {
+                    try {
+                        int bytesAvailable = mmInputStream.available();
+                        if(bytesAvailable > 0) {
+                            byte[] packetBytes = new byte[bytesAvailable];
+                            mmInputStream.read(packetBytes);
+                            for(int i=0;i<bytesAvailable;i++) {
+                                byte b = packetBytes[i];
+                                if(b == delimiter) {
+                                    byte[] encodedBytes = new byte[readBufferPosition];
+                                    System.arraycopy(readBuffer, 0, encodedBytes, 0, encodedBytes.length);
+                                    final String data = new String(encodedBytes, "US-ASCII");
+                                    readBufferPosition = 0;
+
+                                    handler.post(new Runnable() {
+                                        public void run() {
+                                            Log.d("mylog",data);
+
+                                            //myLabel.setText(data);
+                                        }
+                                    });
+                                }else {
+                                    readBuffer[readBufferPosition++] = b;
+                                }
+                            }
+                        }
+                    }catch (IOException ex) {
+                        stopWorker = true;
+                    }
+                }
+            }
+        });
+
+        workerThread.start();
+    }
+
+    void sendData() throws IOException {
+        String msg = "HUUUUU";
+        msg += "\n";
+        //mmOutputStream.write(msg.getBytes());
+        mmOutputStream.write('A');
+        Log.d("mylog","data sent");
+
+        //  myLabel.setText("Data Sent");
+    }
+    
+    private void pairDevice(BluetoothDevice device) {
+        try {
+            Method method = device.getClass().getMethod("createBond", (Class[]) null);
+            method.invoke(device, (Object[]) null);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+    private void unpairDevice(BluetoothDevice device) {
+        try {
+            Method method = device.getClass().getMethod("removeBond", (Class[]) null);
+            method.invoke(device, (Object[]) null);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+    private final BroadcastReceiver mPairReceiver = new BroadcastReceiver() {
+        public void onReceive(Context context, Intent intent) {
+            String action = intent.getAction();
+
+            if (BluetoothDevice.ACTION_BOND_STATE_CHANGED.equals(action)) {
+                final int state        = intent.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, BluetoothDevice.ERROR);
+                final int prevState    = intent.getIntExtra(BluetoothDevice.EXTRA_PREVIOUS_BOND_STATE, BluetoothDevice.ERROR);
+
+                if (state == BluetoothDevice.BOND_BONDED && prevState == BluetoothDevice.BOND_BONDING) {
+                    Toast.makeText(ListofDevices.this,"Paired",Toast.LENGTH_SHORT).show();
+                } else if (state == BluetoothDevice.BOND_NONE && prevState == BluetoothDevice.BOND_BONDED){
+                    Toast.makeText(ListofDevices.this,"Unpaired",Toast.LENGTH_SHORT).show();
+                }
+
+            }
+        }
+    };
+    IntentFilter intent = new IntentFilter(BluetoothDevice.ACTION_BOND_STATE_CHANGED);
+   // registerReceiver(mPairReceiver, intent);
 
     private void scanDevices() {
         btAdapter = BluetoothAdapter.getDefaultAdapter();
